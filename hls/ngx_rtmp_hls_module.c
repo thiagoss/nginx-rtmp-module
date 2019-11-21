@@ -118,6 +118,9 @@ typedef struct {
     ngx_str_t                           key_path;
     ngx_str_t                           key_url;
     ngx_uint_t                          frags_per_key;
+    ngx_flag_t                          start_time_offset_reverse;
+    ngx_msec_t                          start_time_offset;
+    ngx_flag_t                          start_time_precise;
 } ngx_rtmp_hls_app_conf_t;
 
 
@@ -347,6 +350,27 @@ static ngx_command_t ngx_rtmp_hls_commands[] = {
       offsetof(ngx_rtmp_hls_app_conf_t, frags_per_key),
       NULL },
 
+    { ngx_string("hls_start_time_offset"),
+      NGX_RTMP_MAIN_CONF|NGX_RTMP_SRV_CONF|NGX_RTMP_APP_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_msec_slot,
+      NGX_RTMP_APP_CONF_OFFSET,
+      offsetof(ngx_rtmp_hls_app_conf_t, start_time_offset),
+      NULL },
+
+    { ngx_string("hls_start_time_reverse"),
+      NGX_RTMP_MAIN_CONF|NGX_RTMP_SRV_CONF|NGX_RTMP_APP_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_flag_slot,
+      NGX_RTMP_APP_CONF_OFFSET,
+      offsetof(ngx_rtmp_hls_app_conf_t, start_time_offset_reverse),
+      NULL },
+
+    { ngx_string("hls_start_time_precise"),
+      NGX_RTMP_MAIN_CONF|NGX_RTMP_SRV_CONF|NGX_RTMP_APP_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_flag_slot,
+      NGX_RTMP_APP_CONF_OFFSET,
+      offsetof(ngx_rtmp_hls_app_conf_t, start_time_precise),
+      NULL },
+
     ngx_null_command
 };
 
@@ -534,7 +558,7 @@ ngx_rtmp_hls_write_playlist(ngx_rtmp_session_t *s)
     ssize_t                         n;
     ngx_rtmp_hls_app_conf_t        *hacf;
     ngx_rtmp_hls_frag_t            *f;
-    ngx_uint_t                      i, max_frag;
+    ngx_uint_t                      i, max_frag, hls_version;
     ngx_str_t                       name_part, key_name_part;
     uint64_t                        prev_key_id;
     const char                     *sep, *key_sep;
@@ -569,12 +593,17 @@ ngx_rtmp_hls_write_playlist(ngx_rtmp_session_t *s)
     p = buffer;
     end = p + sizeof(buffer);
 
+    hls_version = 3;
+    if (hacf->start_time_offset) {
+        hls_version = 6;
+    }
+
     p = ngx_slprintf(p, end,
                      "#EXTM3U\n"
-                     "#EXT-X-VERSION:3\n"
+                     "#EXT-X-VERSION:%d\n"
                      "#EXT-X-MEDIA-SEQUENCE:%uL\n"
                      "#EXT-X-TARGETDURATION:%ui\n",
-                     ctx->frag, max_frag);
+                     hls_version, ctx->frag, max_frag);
 
     if (hacf->type == NGX_RTMP_HLS_TYPE_EVENT) {
         p = ngx_slprintf(p, end, "#EXT-X-PLAYLIST-TYPE:EVENT\n");
@@ -584,6 +613,15 @@ ngx_rtmp_hls_write_playlist(ngx_rtmp_session_t *s)
         p = ngx_slprintf(p, end, "#EXT-X-ALLOW-CACHE:YES\n");
     } else if (hacf->allow_client_cache == NGX_RTMP_HLS_CACHE_DISABLED) {
         p = ngx_slprintf(p, end, "#EXT-X-ALLOW-CACHE:NO\n");
+    }
+
+    if (hacf->start_time_offset) {
+        float offset = hacf->start_time_offset / 1000.0;
+        if (hacf->start_time_offset_reverse) {
+            offset = -offset;
+        }
+        p = ngx_slprintf(p, end, "#EXT-X-START:%.03f %s\n",
+                offset, hacf->start_time_precise ? "YES" : "NO");
     }
 
     n = ngx_write_fd(fd, buffer, p - buffer);
@@ -2474,6 +2512,9 @@ ngx_rtmp_hls_create_app_conf(ngx_conf_t *cf)
     conf->granularity = NGX_CONF_UNSET;
     conf->keys = NGX_CONF_UNSET;
     conf->frags_per_key = NGX_CONF_UNSET_UINT;
+    conf->start_time_offset_reverse = NGX_CONF_UNSET;
+    conf->start_time_offset = NGX_CONF_UNSET_MSEC;
+    conf->start_time_precise = NGX_CONF_UNSET;
 
     return conf;
 }
@@ -2514,6 +2555,9 @@ ngx_rtmp_hls_merge_app_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_str_value(conf->key_path, prev->key_path, "");
     ngx_conf_merge_str_value(conf->key_url, prev->key_url, "");
     ngx_conf_merge_uint_value(conf->frags_per_key, prev->frags_per_key, 0);
+    ngx_conf_merge_msec_value(conf->start_time_offset, prev->start_time_offset, 0);
+    ngx_conf_merge_value(conf->start_time_offset_reverse, prev->start_time_offset_reverse, 0);
+    ngx_conf_merge_value(conf->start_time_precise, prev->start_time_precise, 0);
 
     if (conf->fraglen) {
         conf->winfrags = conf->playlen / conf->fraglen;
