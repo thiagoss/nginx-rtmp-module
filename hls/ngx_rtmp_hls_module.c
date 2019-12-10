@@ -620,7 +620,7 @@ ngx_rtmp_hls_write_playlist(ngx_rtmp_session_t *s)
         if (hacf->start_time_offset_reverse) {
             offset = -offset;
         }
-        p = ngx_slprintf(p, end, "#EXT-X-START:%.03f %s\n",
+        p = ngx_slprintf(p, end, "#EXT-X-START:TIME-OFFSET=%.03f,PRECISE=%s\n",
                 offset, hacf->start_time_precise ? "YES" : "NO");
     }
 
