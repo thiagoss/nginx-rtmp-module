@@ -1535,7 +1535,7 @@ ngx_rtmp_hls_publish(ngx_rtmp_session_t *s, ngx_rtmp_publish_t *v)
     ngx_memcpy(ctx->stream.data, ctx->playlist.data, ctx->stream.len - 1);
     ctx->stream.data[ctx->stream.len - 1] = (hacf->nested ? '/' : '-');
 
-    /* varint playlist path */
+    /* variant playlist path */
 
     if (hacf->variant) {
         var = hacf->variant->elts;
