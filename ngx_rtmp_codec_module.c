@@ -204,6 +204,11 @@ ngx_rtmp_codec_av(ngx_rtmp_session_t *s, ngx_rtmp_header_t *h,
     if (h->type != NGX_RTMP_MSG_AUDIO && h->type != NGX_RTMP_MSG_VIDEO) {
         return NGX_OK;
     }
+    if (h->type == NGX_RTMP_MSG_VIDEO) {
+        ngx_log_error(NGX_LOG_ERR, s->connection->log, 0,
+                "codec: have video");
+        return NGX_OK;
+    }
 
     ctx = ngx_rtmp_get_module_ctx(s, ngx_rtmp_codec_module);
     if (ctx == NULL) {
